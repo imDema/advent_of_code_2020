@@ -16,3 +16,7 @@ path="src/main.rs"
 [[bin]]
 name="b"
 path="src/main_b.rs"
+
+[[bin]]
+name="small"
+path="src/main_small.rs"

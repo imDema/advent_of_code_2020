@@ -50,21 +50,6 @@ fn sim(ferry: &mut Vec<Vec<Chair>>) -> bool {
     changed
 }
 
-fn print(ferry: &Vec<Vec<Chair>>) {
-    for r in ferry {
-        println!("{}", r.iter().fold(String::new(), |mut acc, x| {
-            let c = match *x {
-                Chair::Floor => '.',
-                Chair::Free(_) => 'L',
-                Chair::Occupied(_) => '#',
-            };
-            acc.push(c);
-            acc
-        }))
-    }
-    println!();
-}
-
 fn main() {
     let stdin = stdin();
 
