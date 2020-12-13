@@ -20,29 +20,22 @@ fn solve(n: i64, a: i64, module: i64) -> i64 {
     (a*ninv).rem_euclid(module)
 }
 
-fn tcr((a, m): (i64, i64), (b,n): (i64, i64)) -> (i64, i64) {
-    let k = ((a - b) * inv(n, m)).rem_euclid(m);
-    (b + n*k, n*m)
-}
-
 fn main() {
     let stdin = stdin();
     let input = stdin.lock().lines().nth(1).unwrap().unwrap();
 
     let an: Vec<(i64, i64)> = input.split(',').enumerate()
-        .inspect(|f| eprintln!("{:?}", f))
         .filter_map(|(i, x)| Some(( i as i64, x.parse::<i64>().ok()?)))
+        .map(|(a,n)|((-a).rem_euclid(n), n))
         .collect();
 
-
-    let N = an.iter().map(|(_,n)|n).product();
+    let big_n = an.iter().map(|(_,n)|n).product();
 
     let mut x = 0;
     for (a, n) in an {
-        let ni = N / n;
+        let ni = big_n / n;
         let yi = solve(ni, 1, n);
-        eprintln!("{}*x = {} mod {}\n{}", ni, 1, n, yi);
-        x = (x + a * ni * yi).rem_euclid(N);
+        x = (x + a * ni * yi).rem_euclid(big_n);
     }
     println!("x: {}", x);
 }
