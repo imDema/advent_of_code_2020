@@ -1,0 +1,13 @@
+num = @{ ASCII_DIGIT+ }
+
+op = _{ add | mult }
+    add  = { "+" }
+    mult = { "*" }
+
+expr = { term ~ (op ~ term)* }
+
+term = _{ num | "(" ~ expr ~ ")" }
+
+calculation = _{ SOI ~ expr ~ EOI }
+
+WHITESPACE = _{ " " | "\t" }
