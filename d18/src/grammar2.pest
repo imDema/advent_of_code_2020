@@ -1,0 +1,11 @@
+num = @{ ASCII_DIGIT+ }
+
+term = _{ num | "(" ~ mult_expr ~ ")" }
+
+add_expr = { term ~ ("+" ~ term)*}
+
+mult_expr = { add_expr ~ ("*" ~ add_expr)* }
+
+calculation = _{ SOI ~ mult_expr ~ EOI }
+
+WHITESPACE = _{ " " | "\t" }
