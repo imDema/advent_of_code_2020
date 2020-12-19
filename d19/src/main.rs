@@ -43,35 +43,27 @@ fn parse_rules(s: &str) -> Result<RuleMap, &'static str> {
     Ok(map)
 }
 
-fn concat_partial(head: &str, tail: Vec<String>) -> Vec<String> {
-    tail.into_iter()
-        .map(|t| {
-            let mut h = head.to_owned();
-            h.push_str(&t);
-            h
-        }).collect()
-}
-
-fn eval_seq(rules: &RuleMap, and: &[usize], input: &str) -> Vec<String> {
+fn eval_seq<'a>(rules: &RuleMap, and: &[usize], input: &'a str) -> Vec<&'a str> {
     match and {
         [x] => eval_rule(rules, *x, input),
         v => {
             let h = eval_rule(rules, v[0], input);
             h.into_iter().flat_map(|head| {
                 let next_match = eval_seq(rules, &and[1..], &input[head.len()..]);
-                concat_partial(&head, next_match)
+                next_match.into_iter()
+                    .map(move |m| &input[..head.len()+m.len()])
             })
             .collect()
         }
     }
 }
 
-fn eval_rule(rules: &RuleMap, id: usize, input: &str) -> Vec<String> {
+fn eval_rule<'a>(rules: &RuleMap, id: usize, input: &'a str) -> Vec<&'a str> {
     let r = rules.get(&id).expect("Missing rule");
     match r {
         Rule::Simple(pat) => {
             if input.starts_with(pat) {
-                return vec![pat.clone()];
+                return vec![&input[..pat.len()]];
             } else {
                 return vec![]
             }
