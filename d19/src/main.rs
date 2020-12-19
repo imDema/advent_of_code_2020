@@ -90,15 +90,24 @@ fn main() {
     let (rules, strings) = buf.split_at(buf.find("\n\n").unwrap());
     let strings = &strings[2..];
 
-    let rules = parse_rules(rules).expect("Could not generate map");
+    let mut rules = parse_rules(rules).expect("Could not generate map");
 
-    let mut sum = 0;
-    for l in strings.split_terminator("\n") {
-        let vs = eval_rule(&rules, 0, l);
-        eprintln!("{} : {:?}", &l, &vs);
-        if vs.into_iter().any(|v| v == l) {
-            sum += 1;
-        }
-    }
-    println!("{}", sum);
+    // Part one
+    let cnt = strings.split_terminator("\n")
+        .map(|s| (s, eval_rule(&rules, 0, s)))
+        .filter(|(s, vs)| vs.into_iter().any(|v| v == s))
+        .count();
+
+    println!("{}", cnt);
+
+    // Part two
+    rules.insert(8, Rule::Ref(vec![vec![42],vec![42, 8]]));
+    rules.insert(11, Rule::Ref(vec![vec![42, 31], vec![42,11,31]]));
+
+    let cnt = strings.split_terminator("\n")
+        .map(|s| (s, eval_rule(&rules, 0, s)))
+        .filter(|(s, vs)| vs.into_iter().any(|v| v == s))
+        .count();
+
+    println!("{}", cnt);
 }
