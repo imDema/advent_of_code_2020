@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io::{stdin, Read};
-use std::iter::{empty, once};
 
 #[derive(Debug)]
 enum Rule {
@@ -44,33 +43,35 @@ fn parse_rules(s: &str) -> Result<RuleMap, &'static str> {
     Ok(map)
 }
 
-fn eval_seq<'a>(rules: &'a RuleMap, and: &'a [usize], input: &'a str) -> Box<dyn Iterator<Item=&'a str> + 'a> {
+fn eval_seq<'a>(rules: &RuleMap, and: &[usize], input: &'a str) -> Vec<&'a str> {
     match and {
         [x] => eval_rule(rules, *x, input),
         v => {
             let h = eval_rule(rules, v[0], input);
-            Box::new(h.into_iter().flat_map(move |head| {
+            h.into_iter().flat_map(|head| {
                 let next_match = eval_seq(rules, &and[1..], &input[head.len()..]);
                 next_match.into_iter()
                     .map(move |m| &input[..head.len()+m.len()])
-            }))
+            })
+            .collect()
         }
     }
 }
 
-fn eval_rule<'a>(rules: &'a RuleMap, id: usize, input: &'a str) -> Box<dyn Iterator<Item=&'a str> + 'a> {
+fn eval_rule<'a>(rules: &RuleMap, id: usize, input: &'a str) -> Vec<&'a str> {
     let r = rules.get(&id).expect("Missing rule");
     match r {
         Rule::Simple(pat) => {
             if input.starts_with(pat) {
-                Box::new(once(&input[..pat.len()]))
+                return vec![&input[..pat.len()]];
             } else {
-                Box::from(empty())
+                return vec![]
             }
         },
         Rule::Ref(v) => {
-            Box::new(v.into_iter()
-                .flat_map(move |or| eval_seq(rules, &or, input)))
+            v.into_iter()
+                .flat_map(|or| eval_seq(rules, &or, input))
+                .collect()
         }
     }
 }
@@ -86,7 +87,7 @@ fn main() {
     // Part one
     let cnt = strings.split_terminator("\n")
         .map(|s| (s, eval_rule(&rules, 0, s)))
-        .filter_map(|(s, mut vs)| vs.find(|&v| v == s))
+        .filter(|(s, vs)| vs.into_iter().any(|v| v == s))
         .count();
 
     println!("{}", cnt);
@@ -97,7 +98,7 @@ fn main() {
 
     let cnt = strings.split_terminator("\n")
         .map(|s| (s, eval_rule(&rules, 0, s)))
-        .filter_map(|(s, mut vs)| vs.find(|&v| v == s))
+        .filter(|(s, vs)| vs.into_iter().any(|v| v == s))
         .count();
 
     println!("{}", cnt);
