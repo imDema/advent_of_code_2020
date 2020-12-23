@@ -1,7 +1,4 @@
 use std::io::{stdin, Read};
-use std::collections::HashMap;
-use std::iter::once;
-
 const M1: u32 = 9;
 const M2: u32 = 1000000;
 
@@ -14,12 +11,12 @@ fn wrapping_decr(x: u32, max: u32) -> u32 {
     }
 }
 
-fn sym(maplist: &mut HashMap<u32,u32>, cur: &mut u32, max: u32) {
+fn sym(maplist: &mut Vec<u32>, cur: &mut u32, max: u32) {
     let mut z = Vec::new();
 
-    z.push(*maplist.get(cur).unwrap());
+    z.push(*maplist.get(*cur as usize as usize).unwrap());
     for _ in 0..2 {
-        z.push(*maplist.get(z.last().unwrap()).unwrap());
+        z.push(*maplist.get(*z.last().unwrap() as usize).unwrap());
     }
 
     let mut tar = wrapping_decr(*cur, max);
@@ -27,11 +24,11 @@ fn sym(maplist: &mut HashMap<u32,u32>, cur: &mut u32, max: u32) {
         tar = wrapping_decr(tar, max);
     }
     
-    let z_index = *maplist.get(cur).unwrap();
-    maplist.insert(*cur, *maplist.get(&z[2]).unwrap());
-    maplist.insert(z[2], *maplist.get(&tar).unwrap());
-    maplist.insert(tar, z_index);
-    *cur = *maplist.get(cur).unwrap()
+    let z_index = *maplist.get(*cur as usize).unwrap();
+    maplist[*cur as usize] = *maplist.get(z[2] as usize).unwrap();
+    maplist[z[2] as usize] = *maplist.get(tar as usize).unwrap();
+    maplist[tar as usize] = z_index;
+    *cur = *maplist.get(*cur as usize).unwrap()
 }
 
 fn main() {
@@ -42,16 +39,19 @@ fn main() {
         .chain(M1+1..M2+1)
         .collect();
 
-    let mut maplist: HashMap<u32,u32> = input.windows(2)
-        .map(|w| (w[0], w[1]))
-        .chain(once((M2, input[0])))
-        .collect();
+
+    let mut maplist: Vec<u32> = vec![0; M2 as usize + 1]; // Use base 1 indexing because this is a challenge and not a serious project
+    
+    for w in input.windows(2) {
+        maplist[w[0] as usize] = w[1];
+    }
+    *maplist.last_mut().unwrap() = input[0];
 
     let mut cur = input[0];
     for _ in 0..10000000 {
         sym(&mut maplist, &mut cur, M2);
     }
-    let a = *maplist.get(&1).unwrap();
-    let b = *maplist.get(&a).unwrap();
+    let a = *maplist.get(1 as usize).unwrap();
+    let b = *maplist.get(a as usize).unwrap();
     println!("{}", a as usize * b as usize);
 }
