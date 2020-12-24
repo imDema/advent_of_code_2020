@@ -20,97 +20,55 @@ enum Side {
     Right,
 }
 
-#[derive(Clone,)]
-struct Tile {
-    id: u16,
-    content: ImageBuffer<Luma<u8>, Vec<u8>>,
-}
+type Tile = ImageBuffer<Luma<u8>, Vec<u8>>;
 
-impl std::fmt::Debug for Tile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Tile#")?;
-        f.write_fmt(format_args!("{}", self.id))?;
-        Ok(())
-    }
-}
-
-impl PartialEq for Tile {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for Tile {}
-
-impl std::hash::Hash for Tile {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u16(self.id);
-    }
-}
-
-impl Tile {
-    fn new(s: &str) -> Self {
-        let n: u16 = (&s[5..9]).parse().expect("Cannot parse id");
+fn parse_image(s: &str) -> Tile {
+    let rows: Vec<&str> = s.split_terminator("\n").collect();
         
-        let mut cnt = 0;
+    let pix: Vec<u8> = rows.iter()
+        .inspect(|&r| assert!(r.len() == rows[0].len()))
+        .flat_map(|l| l.chars().map(|c| if c == '#' {0xffu8} else {0x00u8}))
+        .collect();
+    
+    ImageBuffer::from_vec(rows[0].len() as u32, rows.len() as u32, pix).expect("Cannot create ImageBuffer")
+}
 
-        let vals = s.split_terminator("\n").skip(1)
-            .inspect(|_| cnt += 1)
-            .flat_map(|l| l.chars().map(|c| if c == '#' {0xffu8} else {0x00u8}))
-            .collect();
+fn parse_tile(s: &str) -> (u16, Tile) {
+    let n: u16 = (&s[5..9]).parse().expect("Cannot parse id");
+    
+    let img_data = &s[s.find('\n').expect("Invalid format")+1..];
 
-        let img = ImageBuffer::from_vec(cnt, cnt, vals).expect("Cannot create ImageBuffer");
-        
-        Self {
-            id: n,
-            content: img,
-        }
-    }
+    let img = parse_image(img_data);
+    
+    (n, img)
+}
 
-    fn symmetries(&self) -> TileSymmetries {
-        TileSymmetries{
-            state: Symmetry::Iden,
-            tile: self.clone(),
-        }
-    }
-
-    fn matches(&self, other: &Tile, side: Side) -> bool {
-        let m = (M - 1) as u32;
-        for i in 0..M as u32 {
-            match side {
-                Side::Top if self.content[(0, i)] != other.content[(m, i)] => return false,
-                Side::Bot if self.content[(m, i)] != other.content[(0, i)] => return false,
-                Side::Left if self.content[(i, 0)] != other.content[(i, m)] => return false,
-                Side::Right if self.content[(i, m)] != other.content[(i, 0)] => return false,
-                _ => {}
-            }
-        }
-        true
+fn tile_symmetries(tile: &Tile) -> TileSymmetries {
+    TileSymmetries{
+        i: 0,
+        j: 0,
+        tile: tile.clone(),
     }
 }
 
-enum Symmetry {
-    Iden,
-    Rot(u8),
-    Flip(u8),
-    Transp(u8),
-    End,
-}
-
-impl Symmetry {
-    fn next(&self) -> Self {
-        match *self {
-            Symmetry::Iden => Self::Rot(0),
-            Symmetry::Rot(n) => if n < 2 { Self::Rot(n+1) } else { Self::Flip(0) }
-            Symmetry::Flip(n) => if n < 1 { Self::Flip(n+1) } else { Self::Transp(0) }
-            Symmetry::Transp(n) => if n < 1 { Self::Transp(n+1) } else { Self::End }
-            Symmetry::End => Symmetry::End,
+fn tile_matches(tile: &Tile, other: &Tile, side: Side) -> bool {
+    let m = (M - 1) as u32;
+    for i in 0..M as u32 {
+        match side {
+            Side::Top if tile[(0, i)] != other[(m, i)] => return false,
+            Side::Bot if tile[(m, i)] != other[(0, i)] => return false,
+            Side::Left if tile[(i, 0)] != other[(i, m)] => return false,
+            Side::Right if tile[(i, m)] != other[(i, 0)] => return false,
+            _ => {}
         }
     }
+    true
 }
+
 
 struct TileSymmetries {
-    state: Symmetry,
+    i: u8,
+    j: u8,
     tile: Tile,
 }
 
@@ -118,47 +76,30 @@ impl Iterator for TileSymmetries {
     type Item = Tile;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.state {
-            Symmetry::End => None,
-            Symmetry::Iden => {
-                Some(self.tile.clone())
-            },
-            Symmetry::Rot(n) => {
-                let img = match n {
-                    0 => rotate90(&self.tile.content),
-                    1 => rotate180(&self.tile.content),
-                    2 => rotate270(&self.tile.content),
-                    _ => unreachable!(),
-                };
-                
-                Some(Tile{ id: self.tile.id, content: img,})
-            }
-            Symmetry::Flip(n) => {
-                let img = match n {
-                    0 => flip_horizontal(&self.tile.content),
-                    1 => flip_vertical(&self.tile.content),
-                    _ => unreachable!(),
-                };
+        if self.j >= 2 {
+            return None;
+        }
 
-                Some(Tile{ id: self.tile.id, content: img,})
-            }
-            Symmetry::Transp(n) => {
-                let mut img = rotate90(&self.tile.content);
-                match n {
-                    0 => flip_horizontal_in_place(&mut img),
-                    1 => flip_vertical_in_place(&mut img),
-                    _ => unreachable!(),
-                };
-
-                Some(Tile{ id: self.tile.id, content: img,})
-            }
-        };
-        self.state = self.state.next();
-        ret
+        let ret = self.tile.clone();
+        if self.i < 3 {
+            self.tile = rotate90(&ret);
+            self.i += 1;
+        } else if self.j < 2 {
+            self.tile = flip_horizontal(&rotate90(&ret));
+            self.i = 0;
+            self.j += 1;
+        }
+        Some(ret)
     }
 }
 
-type PhArray = Vec<Vec<Option<Tile>>>;
+type PhArray = Vec<Vec<Option<(u16, Tile)>>>;
+
+macro_rules! get_cell {
+    ($arr:ident, $i:expr, $j:expr) => {
+        $arr.get($i).and_then(|r| r.get($j))
+    };
+}
 
 fn compatible(arr: &mut PhArray, tile: &Tile, i: usize) -> bool {
     let j = i % N;
@@ -166,23 +107,23 @@ fn compatible(arr: &mut PhArray, tile: &Tile, i: usize) -> bool {
 
     //Left
     if j > 0 {
-        if let Some(Some(l)) = arr.get(i).and_then(|r| r.get(j - 1)) {
-            if !tile.matches(&l, Side::Left) {return false}
+        if let Some(Some(l)) = get_cell!(arr, i, j-1) {
+            if !tile_matches(tile, &l.1, Side::Left) {return false}
         }
     }
     //Right
-    if let Some(Some(l)) = arr.get(i).and_then(|r| r.get(j + 1)) {
-        if !tile.matches(&l, Side::Right) {return false}
+    if let Some(Some(l)) = get_cell!(arr, i, j+1) {
+        if !tile_matches(tile, &l.1, Side::Right) {return false}
     }
     //Top
     if i > 0 {
-        if let Some(Some(l)) = arr.get(i - 1).and_then(|r| r.get(j)) {
-            if !tile.matches(&l, Side::Top) {return false}
+        if let Some(Some(l)) = get_cell!(arr, i-1, j) {
+            if !tile_matches(tile, &l.1, Side::Top) {return false}
         }
     }
     //Bot
-    if let Some(Some(l)) = arr.get(i + 1).and_then(|r| r.get(j)) {
-        if !tile.matches(&l, Side::Bot) {return false}
+    if let Some(Some(l)) = get_cell!(arr, i+1, j) {
+        if !tile_matches(tile, &l.1, Side::Bot) {return false}
     }
 
     true
@@ -190,16 +131,16 @@ fn compatible(arr: &mut PhArray, tile: &Tile, i: usize) -> bool {
 
 fn place(arr: &mut PhArray, tiles: &HashMap<u16, Tile>, avail: &mut HashSet<u16>, i: usize) -> bool {
     if i == N*N {return true}
-    println!("{:?}", arr.iter().flat_map(|r|r.iter().filter(|&e| e.is_some())).collect::<Vec<_>>());
+    // println!("{:?}", arr.iter().flat_map(|r|r.iter().filter(|&e| e.is_some())).collect::<Vec<_>>());
     let x = i / N;
     let y = i % N;
     assert!(arr[x][y].is_none());
 
     for id in avail.clone() {
         avail.remove(&id);
-        for sym in tiles[&id].symmetries() {
+        for sym in tile_symmetries(&tiles[&id]) {
             if compatible(arr, &sym, i) {
-                arr[x][y] = Some(sym);
+                arr[x][y] = Some((id, sym));
                 
                 if place(arr, tiles, avail, i + 1) {
                     return true;
@@ -212,81 +153,80 @@ fn place(arr: &mut PhArray, tiles: &HashMap<u16, Tile>, avail: &mut HashSet<u16>
     false
 }
 
-fn merge(tiles: Vec<Vec<Tile>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+fn merge(tiles: Vec<Vec<(u16,Tile)>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let s = (N * (M-2)) as u32;
     let m = (M - 2) as u32;
     let buf = ImageBuffer::from_fn(s, s, |x, y| {
         let tx = (x/m) as usize;
         let ty = (y/m) as usize;
-        let tile = &tiles[tx][ty];
+        let tile = &tiles[tx][ty].1;
         let xx = (x % m) + 1;
         let yy = (y % m) + 1;
 
-        tile.content[(xx, yy)]
+        tile[(xx, yy)]
     });
 
     buf
 }
 
-fn sparse_pattern(pat: &str) -> Vec<(u32,u32)> {
-    pat.split_terminator('\n')
-        .enumerate()
-        .flat_map(|(i, l)| l.chars().enumerate().map(move |(j, c)| (i, j, c)))
-        .filter_map(|(i, j, c)| if c == '#' {Some((i as u32, j as u32))} else {None})
-        .collect()
-}
-
-lazy_static!(
-    static ref PATTERN: Vec<(u32, u32)> = sparse_pattern(&"                  # \n#    ##    ##    ###\n #  #  #  #  #  #   \n");
-);
-
-const PAT_X: u32 = 20;
-const PAT_Y: u32 = 3;
-
-fn mark_if_pat(image: &ImageBuffer<Luma<u8>, Vec<u8>>, mask: &mut Vec<Vec<bool>>, i: u32, j: u32) {
+fn mark_if_pat(image: &ImageBuffer<Luma<u8>, Vec<u8>>, mask: &mut Vec<Vec<bool>>, pat: &Tile, i: u32, j: u32) {
     let mut flag = true;
-    for &(x, y) in PATTERN.iter() {
-        if image[(i+x, j+y)] == Luma([0]) {
+    let path = pat.enumerate_pixels()
+        .filter(|&s| *s.2 == Luma([0xff]))
+        .map(|(x, y, _)| (i+x, j+y));
+
+    for (x, y) in path.clone() {
+        if image[(x, y)] == Luma([0x00]) {
             flag = false;
             break;
         }
     }
 
     if flag {
-        for &(x, y) in PATTERN.iter() {
-            mask[(i+x) as usize][(j+y) as usize] = true;
+        for (x, y) in path {
+            mask[x as usize][y as usize] = true;
         }
     }
 }
 
-fn check_patterns(image: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<Vec<bool>> {
+fn check_patterns(image: &Tile, pat: &Tile) -> Vec<Vec<bool>> {
     let mut mask = vec![vec![false; image.width() as usize] ; image.width() as usize];
-    for i in 0..image.width() - PAT_X {
-        for j in 0..image.height() - PAT_Y {
-            mark_if_pat(image, &mut mask, i, j);
+    for sym in tile_symmetries(pat) {
+        for i in 0..image.width() - sym.width() {
+            for j in 0..image.height() - sym.height() {
+                mark_if_pat(image, &mut mask, &sym, i, j);
+            }
         }
     }
     mask
 }
+
+const PAT: &str = &"                  # \n#    ##    ##    ###\n #  #  #  #  #  #   \n";
 
 fn main() {
     let mut buf = String::new();
     stdin().read_to_string(&mut buf).unwrap();
 
     let tiles: HashMap<u16, Tile> = buf.split_terminator("\n\n")
-        .map(|t| Tile::new(t))
-        .map(|t| (t.id, t))
+        .map(parse_tile)
         .collect();
 
     let mut arr: PhArray = vec![vec![None; N] ; N];
     let mut avail = tiles.keys().map(|k| *k).collect();
     place(&mut arr, &tiles, &mut avail , 0);
 
-    let out: Vec<Vec<Tile>> = arr.into_iter().map(|l| l.into_iter().map(|o| o.unwrap()).collect()).collect();
+    let out: Vec<Vec<(u16,Tile)>> = arr.into_iter().map(|l| l.into_iter().map(|o| o.unwrap()).collect()).collect();
 
-    println!("{}", out[0][0].id as usize * out[0][N-1].id as usize * out[N-1][ 0].id as usize * out[N-1][N-1].id as usize);
+    println!("{}", out[0][0].0 as usize * out[0][N-1].0 as usize * out[N-1][ 0].0 as usize * out[N-1][N-1].0 as usize);
 
     let merged = merge(out);
 
-    
+    let pat = parse_image(PAT);
+
+    let match_map = check_patterns(&merged, &pat);
+
+    let tot = merged.pixels().filter(|&&p| p == Luma([0xff])).count();
+    let monster = match_map.into_iter().flat_map(|v| v.into_iter()).filter(|&b| b).count();
+
+    println!("{}", tot - monster);
 }
